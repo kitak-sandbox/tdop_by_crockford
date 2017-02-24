@@ -139,4 +139,15 @@ var new_scope = function () {
     return scope;
 };
 
-
+var expression = function (rbp) {
+    var left;
+    var t = token;
+    advance();
+    left = t.nud();
+    while (rbp < token.lbp) {
+        t = token;
+        advance();
+        left = t.led(left);
+    }
+    return left;
+}
