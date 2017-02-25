@@ -140,14 +140,140 @@ var new_scope = function () {
 };
 
 var expression = function (rbp) {
+    // 29
+
     var left;
     var t = token;
     advance();
     left = t.nud();
+    // 2
+    // 29 < 50 → 29 < 30 → 29 < 0
     while (rbp < token.lbp) {
+        // 3 → 4
         t = token;
         advance();
+        // ((2 * 3) && 4)
         left = t.led(left);
     }
     return left;
 }
+
+var infix = function (id, bp, led) {
+    var s = symbol(id, bp);
+    s.led = led || function (left) {
+        this.first = left;
+        this.second = expression(bp);
+        this.arity = "binary";
+        return this;
+    };
+    return s;
+};
+
+infix("+", 50);
+infix("-", 50);
+infix("*", 60);
+infix("/", 60);
+
+infix("===", 40);
+infix("!==", 40);
+infix("<", 40);
+infix("<=", 40);
+infix(">", 40);
+infix(">=", 40);
+
+infix("?", 20, function (left) {
+    this.first = left;
+    this.second = expression(0);
+    advance(":");
+    this.third = expression(0);
+    this.arity = "ternary";
+    return this;
+});
+
+infix(".", 80, function (left) {
+    this.first = left;
+    if (token.arity !== "name") {
+        token.error("Expected a property name.");
+    }
+    token.arity = "literal";
+    this.second = token;
+    this.arity = "binary";
+    advance();
+    return this;
+});
+
+infix("[", 80, function (left) {
+    this.first = left;
+    this.second = expression(0);
+    this.arity = "binary";
+    advance("]");
+    return this;
+});
+
+var infixr = function (id, bp, led) {
+    var s = symbol(id, bp);
+    s.led = led || function (left) {
+        this.first = left;
+        this.second = expression(bp - 1);
+        this.arity = "binary";
+        return this;
+    };
+    return s;
+};
+
+infixr("&&", 30);
+infixr("||", 30);
+
+var prefix = function (id, nud) {
+    var s = symbol(id);
+    s.nud = nud || function () {
+        scope.reserve(this);
+        this.first = expression(70);
+        this.arity = "unary";
+        return this;
+    };
+    return s;
+}
+prefix("-");
+prefix("!");
+prefix("typeof");
+prefix("(", function () {
+    var e = expression(0);
+    advance(")");
+    return e;
+});
+
+var assignment = function (id) {
+    return infixr(id, 10, function (left) {
+        if (left.id !== "." && left.id !== "[" &&
+                left.arity !== "name") {
+            left.error("Bad lvalue.");
+        }
+        this.first = left;
+        this.second = expression(9);
+        this.assignment = true;
+        this.arity = "binary";
+        return this;
+    });
+};
+assignment("=");
+assignment("+=");
+assignment("-=");
+
+var constant = function (s, v) {
+    var x = symbol(s);
+    x.nud = function () {
+        scope.reserve(this);
+        this.value = symbol_table[this.id].value;
+        this.arity = "literal";
+        return this;
+    };
+    x.value = v;
+    return x;
+};
+constant("true", true);
+constant("false", false);
+constant("null", null);
+constant("pi", 3.141592653589793);
+
+symbol("(literal)").nud = itself;
